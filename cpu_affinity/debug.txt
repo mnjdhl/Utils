@@ -1,0 +1,60 @@
+Thread 3 "socksrv_thpool_" received signal SIGPIPE, Broken pipe.
+[Switching to Thread 0x7ffff7288640 (LWP 5912)]
+0x00007ffff7bdd67e in send () from /lib64/libc.so.6
+Missing separate debuginfos, use: dnf debuginfo-install glibc-2.34-40.el9_1.1.x86_64 libgcc-11.3.1-2.1.el9.x86_64 libstdc++-11.3.1-2.1.el9.x86_64
+(gdb) bt
+#0  0x00007ffff7bdd67e in send () from /lib64/libc.so.6
+#1  0x0000000000402b50 in handle_client_request (cfd=6) at socksrv_thpool_aff.cpp:174
+#2  0x0000000000402c63 in request_handler_thread (param=0x40b4d0 <queindx>) at socksrv_thpool_aff.cpp:216
+#3  0x00007ffff7b2d802 in start_thread () from /lib64/libc.so.6
+#4  0x00007ffff7acd450 in clone3 () from /lib64/libc.so.6
+
+
+Thread 3 "socksrv_thpool_" received signal SIGPIPE, Broken pipe.
+[Switching to Thread 0x7ffff7288640 (LWP 6022)]
+__libc_send (flags=<optimized out>, len=50, buf=0x4071c8, fd=6) at ../sysdeps/unix/sysv/linux/send.c:28
+28        return SYSCALL_CANCEL (sendto, fd, buf, len, flags, NULL, 0);
+(gdb) bt
+#0  __libc_send (flags=<optimized out>, len=50, buf=0x4071c8, fd=6) at ../sysdeps/unix/sysv/linux/send.c:28
+#1  __libc_send (fd=6, buf=0x4071c8, len=50, flags=0) at ../sysdeps/unix/sysv/linux/send.c:23
+#2  0x0000000000402b50 in handle_client_request (cfd=6) at socksrv_thpool_aff.cpp:174
+#3  0x0000000000402c63 in request_handler_thread (param=0x40b4d0 <queindx>) at socksrv_thpool_aff.cpp:216
+#4  0x00007ffff7b2d802 in start_thread (arg=<optimized out>) at pthread_create.c:443
+#5  0x00007ffff7acd450 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+
+
+(gdb) thread apply all bt
+
+Thread 5 (Thread 0x7ffff6286640 (LWP 6024) "socksrv_thpool_"):
+#0  0x00007ffff7ba1845 in __GI___clock_nanosleep (clock_id=clock_id@entry=0, flags=flags@entry=0, req=req@entry=0x7ffff6285e00, rem=rem@entry=0x0) at ../sysdeps/unix/sysv/linux/clock_nanosleep.c:48
+#1  0x00007ffff7ba63f7 in __GI___nanosleep (req=req@entry=0x7ffff6285e00, rem=rem@entry=0x0) at ../sysdeps/unix/sysv/linux/nanosleep.c:25
+#2  0x00007ffff7bd3629 in usleep (useconds=<optimized out>) at ../sysdeps/posix/usleep.c:32
+#3  0x0000000000402c72 in request_handler_thread (param=0x40b4d8 <queindx+8>) at socksrv_thpool_aff.cpp:218
+#4  0x00007ffff7b2d802 in start_thread (arg=<optimized out>) at pthread_create.c:443
+#5  0x00007ffff7acd450 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+
+Thread 4 (Thread 0x7ffff6a87640 (LWP 6023) "socksrv_thpool_"):
+#0  0x00007ffff7ba1845 in __GI___clock_nanosleep (clock_id=clock_id@entry=0, flags=flags@entry=0, req=req@entry=0x7ffff6a86e00, rem=rem@entry=0x0) at ../sysdeps/unix/sysv/linux/clock_nanosleep.c:48
+#1  0x00007ffff7ba63f7 in __GI___nanosleep (req=req@entry=0x7ffff6a86e00, rem=rem@entry=0x0) at ../sysdeps/unix/sysv/linux/nanosleep.c:25
+#2  0x00007ffff7bd3629 in usleep (useconds=<optimized out>) at ../sysdeps/posix/usleep.c:32
+#3  0x0000000000402c72 in request_handler_thread (param=0x40b4d4 <queindx+4>) at socksrv_thpool_aff.cpp:218
+#4  0x00007ffff7b2d802 in start_thread (arg=<optimized out>) at pthread_create.c:443
+#5  0x00007ffff7acd450 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+
+Thread 3 (Thread 0x7ffff7288640 (LWP 6022) "socksrv_thpool_"):
+#0  __libc_send (flags=<optimized out>, len=50, buf=0x4071c8, fd=6) at ../sysdeps/unix/sysv/linux/send.c:28
+#1  __libc_send (fd=6, buf=0x4071c8, len=50, flags=0) at ../sysdeps/unix/sysv/linux/send.c:23
+#2  0x0000000000402b50 in handle_client_request (cfd=6) at socksrv_thpool_aff.cpp:174
+#3  0x0000000000402c63 in request_handler_thread (param=0x40b4d0 <queindx>) at socksrv_thpool_aff.cpp:216
+#4  0x00007ffff7b2d802 in start_thread (arg=<optimized out>) at pthread_create.c:443
+#5  0x00007ffff7acd450 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+
+Thread 2 (Thread 0x7ffff7a89640 (LWP 6021) "socksrv_thpool_"):
+#0  0x00007ffff7bdc658 in __GI_epoll_pwait (epfd=5, events=0x7ffff7a88e00, maxevents=5, timeout=10000, set=0x7ffff7a88d80) at ../sysdeps/unix/sysv/linux/epoll_pwait.c:40
+#1  0x0000000000402cca in poller_thread () at socksrv_thpool_aff.cpp:232
+#2  0x00007ffff7b2d802 in start_thread (arg=<optimized out>) at pthread_create.c:443
+#3  0x00007ffff7acd450 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+
+Thread 1 (Thread 0x7ffff7a8d180 (LWP 6017) "socksrv_thpool_"):
+#0  0x00007ffff7bdd29f in __libc_accept (fd=4, addr=..., len=0x7fffffffdebc) at ../sysdeps/unix/sysv/linux/accept.c:26
+#1  0x0000000000402f55 in main () at socksrv_thpool_aff.cpp:316

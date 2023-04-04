@@ -131,7 +131,8 @@ void *request_handler_thread(void *param) {
 	int th_pid = syscall(SYS_gettid);
 
 
-	cpu_affi.set_cpu_affinity(qindx);
+	//cpu_affi.set_cpu_affinity(qindx);
+	cpu_affi.set_cpu_affinity();
 
 	cout << "Started Request Handler Thread "<< th_pid << " with Queue Index = " << qindx <<endl;
 

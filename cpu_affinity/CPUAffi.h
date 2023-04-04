@@ -1,8 +1,9 @@
+#include <atomic>
 #include <map>
 using namespace std;
 
 
-#define LINUX_SYS_CPU_DIRECTORY "/sys/devices/system/cpu"
+#define _LINUX_SYS_CPU_PATH "/sys/devices/system/cpu"
 
 typedef struct _cpu_info {
 	int cpu_num;
@@ -13,18 +14,21 @@ typedef struct _cpu_info {
 class CPUAffi {
 
 private:
-	int cpu_size;
+	int _cpu_size;
 	map<int, cpu_info_t> cpu_list;
-	bool debug_on;
+	atomic_uint32_t _affi_set_cnt;
+	bool _debug_on;
 
 	void get_cpu_list();
+	void set_cpu_affinity(int cpu_indx, int th_pid); 
       
 public:
 	CPUAffi(bool); 
 
-	int GetCPUCount();
+	int get_cpu_count();
 
 	void set_cpu_affinity(int th_num); 
+	void set_cpu_affinity(); 
 
 };
 

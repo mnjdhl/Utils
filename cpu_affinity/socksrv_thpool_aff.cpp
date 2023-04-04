@@ -34,8 +34,16 @@ int epfd;
 /* Client socket fd queues, one queue per thread */
 queue<int> cfd_que[THREAD_POOL_SZ];
 int queindx[THREAD_POOL_SZ];
-map<string, int> cpu_list;
+
 int cpu_size;
+
+typedef struct _cpu_info {
+	int cpu_num;
+	char cpu_name[255];
+	//char *cpu_name;
+} cpu_info_t;
+
+map<int, cpu_info_t> cpu_list;
 
 int GetCPUCount()
 {
@@ -50,7 +58,8 @@ void get_cpu_list() {
    int cpu_count = 0, cpu_indx;
    const struct dirent *cpu_dir;
    DIR *sys_cpu_dir;
-   map<string, int>::iterator it;
+   map<int, cpu_info_t>::iterator it;
+   cpu_info_t ci;
    
    sys_cpu_dir = opendir(LINUX_SYS_CPU_DIRECTORY);
 
@@ -68,7 +77,9 @@ void get_cpu_list() {
        }
 
 	cpu_indx = atoi(strstr(cpu_dir->d_name, "cpu")+3);
-       cpu_list[cpu_dir->d_name] = cpu_indx;
+	ci.cpu_num = cpu_indx;
+	strcpy(ci.cpu_name,  cpu_dir->d_name);
+       cpu_list[cpu_count] = ci; //cpu_info_t{cpu_indx, (char *)cpu_dir->d_name};
        //cout<<cpu_dir->d_name<<"-"<<cpu_indx<<endl;
        cpu_count++;
    }
@@ -76,7 +87,7 @@ void get_cpu_list() {
    cout<<"CPU List:"<<endl;
    cout<<"---------"<<endl;
    for (it = cpu_list.begin(); it != cpu_list.end(); ++it) {
-	cout<<it->first<<" --> "<<it->second<<endl;
+	cout<<it->first<<" --> "<<it->second.cpu_num<<"---"<<it->second.cpu_name<<endl;
    }
    printf("CPU count: %d\n", cpu_count);
 }
@@ -88,7 +99,8 @@ void set_cpu_affinity(int th_num) {
 	int cpunum = th_num % cpu_size;
 
 	CPU_ZERO(&mask);
-	CPU_SET(cpunum, &mask);
+	//CPU_SET(cpunum, &mask);
+	CPU_SET(cpu_list[cpunum].cpu_num, &mask);
 
 	int err = sched_setaffinity(th_pid, sizeof(cpu_set_t), &mask);
 	if (err == 0) {

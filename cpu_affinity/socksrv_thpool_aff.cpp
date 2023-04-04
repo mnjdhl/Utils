@@ -18,6 +18,7 @@
 #include <iostream>
 #include <queue>
 #include <map>
+#include "CPUAffi.h"
 
 using namespace std;
 
@@ -35,81 +36,7 @@ int epfd;
 queue<int> cfd_que[THREAD_POOL_SZ];
 int queindx[THREAD_POOL_SZ];
 
-int cpu_size;
-
-typedef struct _cpu_info {
-	int cpu_num;
-	char cpu_name[255];
-	//char *cpu_name;
-} cpu_info_t;
-
-map<int, cpu_info_t> cpu_list;
-
-int GetCPUCount()
-{
-	cpu_set_t cs;
-	
-	sched_getaffinity(0, sizeof(cs), &cs);
-	
-	return CPU_COUNT_S(sizeof(cs), &cs);
-}
-
-void get_cpu_list() {
-   int cpu_count = 0, cpu_indx;
-   const struct dirent *cpu_dir;
-   DIR *sys_cpu_dir;
-   map<int, cpu_info_t>::iterator it;
-   cpu_info_t ci;
-   
-   sys_cpu_dir = opendir(LINUX_SYS_CPU_DIRECTORY);
-
-   if (sys_cpu_dir == NULL) {
-       int err = errno;
-       printf("Cannot open %s directory, error (%s).\n", LINUX_SYS_CPU_DIRECTORY, strerror(err));
-       return;
-   }
-
-   while((cpu_dir = readdir(sys_cpu_dir)) != NULL) {
-       if (fnmatch("cpu[0-9]*", cpu_dir->d_name, 0) != 0)
-       {
-          /* Skip the file which does not represent a CPU */
-          continue;
-       }
-
-	cpu_indx = atoi(strstr(cpu_dir->d_name, "cpu")+3);
-	ci.cpu_num = cpu_indx;
-	strcpy(ci.cpu_name,  cpu_dir->d_name);
-       cpu_list[cpu_count] = ci; //cpu_info_t{cpu_indx, (char *)cpu_dir->d_name};
-       //cout<<cpu_dir->d_name<<"-"<<cpu_indx<<endl;
-       cpu_count++;
-   }
-   cpu_size = cpu_count;
-   cout<<"CPU List:"<<endl;
-   cout<<"---------"<<endl;
-   for (it = cpu_list.begin(); it != cpu_list.end(); ++it) {
-	cout<<it->first<<" --> "<<it->second.cpu_num<<"---"<<it->second.cpu_name<<endl;
-   }
-   printf("CPU count: %d\n", cpu_count);
-}
-
-void set_cpu_affinity(int th_num) {
-	cpu_set_t mask;
-	int th_pid = syscall(SYS_gettid);
-
-	int cpunum = th_num % cpu_size;
-
-	CPU_ZERO(&mask);
-	//CPU_SET(cpunum, &mask);
-	CPU_SET(cpu_list[cpunum].cpu_num, &mask);
-
-	int err = sched_setaffinity(th_pid, sizeof(cpu_set_t), &mask);
-	if (err == 0) {
-		cout <<"set_cpu_affinity():sched_setaffinity() succeeds on CPU " << cpunum<<" for the thread "<<th_pid<< endl;
-	} else {
-		cout <<"set_cpu_affinity():sched_setaffinity() fails, " << strerror(errno) << endl;
-	}
-
-}
+CPUAffi cpu_affi(false);
 
 void add_socket(int cfd) {
 	static struct epoll_event ev;
@@ -166,17 +93,17 @@ void handle_client_request(int cfd) {
     int rsz;
 
 	/* Receive data sent by the client */
-    	
-    	while (true) {
-	    //bytes_read = read(cfd, msg_buf, sizeof(msg_buf));
-		rsz = recv(cfd, msg_buf, sizeof(msg_buf), MSG_DONTWAIT);
 
-	    if (rsz <= 0)
-	    {
-		    //remove_socket(cfd);
-		    //return;
-		    break;
-	    }
+	while (true) {
+	//bytes_read = read(cfd, msg_buf, sizeof(msg_buf));
+	rsz = recv(cfd, msg_buf, sizeof(msg_buf), MSG_DONTWAIT);
+
+	if (rsz <= 0)
+	{
+	    //remove_socket(cfd);
+	    //return;
+	    break;
+	}
 	/* Set the last index of the character array as a null character */
 	    msg_buf[rsz] = '\0';
 	    printf("Message (%d bytes) from client: %s \n", rsz, msg_buf);
@@ -188,7 +115,7 @@ void handle_client_request(int cfd) {
 
 }
 
-void do_sig_mask() {
+void do_sig_ignore() {
 
 	struct sigaction sa;
 
@@ -203,9 +130,8 @@ void *request_handler_thread(void *param) {
 	int qindx = *(int *)param;
 	int th_pid = syscall(SYS_gettid);
 
-	//do_sig_mask();
 
-	set_cpu_affinity(qindx);
+	cpu_affi.set_cpu_affinity(qindx);
 
 	cout << "Started Request Handler Thread "<< th_pid << " with Queue Index = " << qindx <<endl;
 
@@ -249,10 +175,7 @@ void *poller_thread(void *) {
 
 }
 
-int main()
-{
-
-	pthread_t threads[THREAD_POOL_SZ + 1];
+void do_start_socksrv() {
 	int srv_sfd;
 	int cli_sfd;
 	int addr_len;
@@ -260,13 +183,9 @@ int main()
 	struct sockaddr_in srv_addr;
 	struct sockaddr_in cli_addr;
 
-	cout <<"CPU Count = " << GetCPUCount <<endl;
-	get_cpu_list();
-
 	/* Creating the socket with IPv4 domain and TCP protocol */
 	srv_sfd = socket(AF_INET, SOCK_STREAM, 0);
-	/* Check if the socket is created successfully */
-	if (srv_sfd<0)
+	if (srv_sfd < 0)
 	{
 		perror("Socket creation failed");
 		/* EXIT_FAILURE is a macro used to indicate unsuccessful execution of the program */
@@ -274,62 +193,68 @@ int main()
 	}     
 
 	/* Set options for the socket */
-	int status=setsockopt(srv_sfd, SOL_SOCKET,SO_REUSEADDR , &opt_val,sizeof(opt_val));
-	/* Check if options are set successfully */
-	if (status<0){
+	int status = setsockopt(srv_sfd, SOL_SOCKET,SO_REUSEADDR , &opt_val,sizeof(opt_val));
+	if (status < 0){
 		perror("Couldn't set options");
 		exit(EXIT_FAILURE);
 	}
 	/* Initializing structure elements for address */
 	srv_addr.sin_family = AF_INET;
-	/* Convert port to network byte order using htons */
 	srv_addr.sin_port = htons(CONNECTION_PORT);
-	/* Any address available */
 	srv_addr.sin_addr.s_addr = INADDR_ANY;
-	/* Assigning null character to the last index of the character array */
-	srv_addr.sin_zero[8]='\0';
+	srv_addr.sin_zero[8] = '\0';
+
 	/* bind the socket with the values address and port from the sockaddr_in structure */
-	status=bind(srv_sfd, (struct sockaddr*)&srv_addr, sizeof(struct sockaddr));
-	/* Check if the binding was successful */
-	if (status<0) {
+	status = bind(srv_sfd, (struct sockaddr*)&srv_addr, sizeof(struct sockaddr));
+	if (status < 0) {
 		perror("Couldn't bind socket");
 		exit(EXIT_FAILURE);
 	}
 
-	do_sig_mask();
-
-	/* Create epoll fd, poller thread and client request handler threads */
-	pthread_attr_init(&attr);
-	epfd = epoll_create(10);
-	pthread_create(&threads[0], &attr, poller_thread, NULL);
-	for(int i=1;i<(THREAD_POOL_SZ + 1);i++) {
-		queindx[i-1] = i-1;
-		pthread_create(&threads[i], &attr, request_handler_thread, (void *)&queindx[i-1]);
-	}
-	//pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	/* Let's loop indefinitely, waiting for client requests */
 	while (true) {
 
 	    /* Listen on specified port with a maximum of 4 requests */
 	    status = listen(srv_sfd, 4);
 	    
-	    /* Check if the socket is listening successfully */
 	    if (status<0) {
 		perror("Couldn't listen for connections");
 		exit(EXIT_FAILURE);
 	    }
 	    addr_len = sizeof(cli_addr);
 	    
-	    //pthread_create(&threads[0], &attr, handle_client_request, (void *)&cli_sfd);
-	    //handle_client_request(cli_sfd);
-	    //pthread_join(threads[0], NULL);
 
 	    /* Accept connection signals from the client */
 	    cli_sfd = accept(srv_sfd, (struct sockaddr*)&cli_addr, (socklen_t*)&addr_len);
 	    add_socket(cli_sfd);
 	}
 
-	pthread_attr_destroy(&attr);
 	close(srv_sfd);
+
+
+}
+
+int main()
+{
+
+	pthread_t threads[THREAD_POOL_SZ + 1];
+
+	do_sig_ignore();
+
+	/* Create epoll fd, poller thread and client request handler threads */
+	pthread_attr_init(&attr);
+	//pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	epfd = epoll_create(10);
+	pthread_create(&threads[0], &attr, poller_thread, NULL);
+	for(int i=1;i<(THREAD_POOL_SZ + 1);i++) {
+		queindx[i-1] = i-1;
+		pthread_create(&threads[i], &attr, request_handler_thread, (void *)&queindx[i-1]);
+	}
+
+	do_start_socksrv();
+
+	pthread_attr_destroy(&attr);
+	//pthread_join(threads[0], NULL);
 	return 0;
 }
 

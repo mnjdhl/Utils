@@ -33,8 +33,10 @@ pthread_attr_t attr;
 int epfd;
 
 /* Client socket fd queues, one queue per thread */
-queue<int> cfd_que[THREAD_POOL_SZ];
-int queindx[THREAD_POOL_SZ];
+int _thread_pool_sz;
+queue<int> *cfd_que;
+int *queindx;
+pthread_t *threads;
 
 CPUAffi cpu_affi(false);
 
@@ -169,7 +171,7 @@ void *poller_thread(void *) {
 
 		for(int i=0;i<nfds;i++) {
 			//cout <<"Pushing to queue" << i%3 <<endl;
-			qi = events[i].data.fd % THREAD_POOL_SZ;
+			qi = events[i].data.fd % _thread_pool_sz;
 			cfd_que[qi].push(events[i].data.fd);
 		}
 	  }
@@ -235,22 +237,39 @@ void do_start_socksrv() {
 
 }
 
-int main()
-{
-
-	pthread_t threads[THREAD_POOL_SZ + 1];
-
-	do_sig_ignore();
+void do_start_threads() {
 
 	/* Create epoll fd, poller thread and client request handler threads */
 	pthread_attr_init(&attr);
 	//pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 	epfd = epoll_create(10);
+	/* Create the poller thread which listens for new connection requests */
 	pthread_create(&threads[0], &attr, poller_thread, NULL);
-	for(int i=1;i<(THREAD_POOL_SZ + 1);i++) {
+	/* Create the handler threads which handle requests from existing connections */
+	for(int i=1;i<(_thread_pool_sz + 1);i++) {
 		queindx[i-1] = i-1;
 		pthread_create(&threads[i], &attr, request_handler_thread, (void *)&queindx[i-1]);
 	}
+}
+
+void init() {
+
+	_thread_pool_sz = cpu_affi.get_cpu_count();
+	cfd_que = new queue<int>[_thread_pool_sz];
+	queindx = new int[_thread_pool_sz];	
+	threads = new pthread_t[_thread_pool_sz + 1];
+}
+
+
+int main()
+{
+
+
+	do_sig_ignore();
+
+	init();
+
+	do_start_threads();
 
 	do_start_socksrv();
 

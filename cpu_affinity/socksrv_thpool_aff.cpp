@@ -62,7 +62,7 @@ void remove_socket(int sfd) {
 
 	    ev.data.fd = sfd;
 	    ev.events = EPOLLIN;
-	    //int err = epoll_ctl(epfd, EPOLL_CTL_DEL, sfd, NULL);
+	    /* int err = epoll_ctl(epfd, EPOLL_CTL_DEL, sfd, NULL); */
 	    int err = epoll_ctl(epfd, EPOLL_CTL_DEL, sfd, &ev);
 	    if (err == -1 && errno != EBADF) {
 		cout << "remove_socket():epoll_ctl() failed during socket delete with error - " << strerror(errno) << endl;
@@ -91,7 +91,7 @@ bool is_closed(int sfd) {
 void handle_client_request(int cfd) {
 /* Buffer to store message */
     char msg_buf[512];
-    char* message = "Hello Client!! This is a message from your server!";
+    const char* message = "Hello Client!! This is a message from your server!";
     int rsz;
 
 	/* Receive data sent by the client */

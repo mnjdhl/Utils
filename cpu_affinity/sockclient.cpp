@@ -12,7 +12,7 @@
 int main()
 {
 	struct sockaddr_in srv_addr;
-	char* message="This is a message from the client";
+	const char* message="This is a message from the client";
 	char msg_buf[50];
 	char rcv_buf[100];
 	int status = 0;

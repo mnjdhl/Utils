@@ -152,7 +152,8 @@ void *poller_thread(void *) {
 
 }
 
-int main()
+uint16_t conn_port = 0;
+int main(int argc, char *argv[])
 {
 
 	pthread_t threads[THREAD_POOL_SZ + 1];
@@ -163,6 +164,12 @@ int main()
 	struct sockaddr_in srv_addr;
 	struct sockaddr_in cli_addr;
 
+    if (argc > 1)
+        conn_port = atoi(argv[1]);
+
+    if (conn_port == 0)
+        conn_port = CONNECTION_PORT;
+         
 	/* Creating the socket with IPv4 domain and TCP protocol */
 	srv_sfd = socket(AF_INET, SOCK_STREAM, 0);
 	/* Check if the socket is created successfully */
@@ -183,7 +190,7 @@ int main()
 	/* Initializing structure elements for address */
 	srv_addr.sin_family = AF_INET;
 	/* Convert port to network byte order using htons */
-	srv_addr.sin_port = htons(CONNECTION_PORT);
+	srv_addr.sin_port = htons(conn_port);
 	/* Any address available */
 	srv_addr.sin_addr.s_addr = INADDR_ANY;
 	/* Assigning null character to the last index of the character array */

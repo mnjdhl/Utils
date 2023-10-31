@@ -37,8 +37,10 @@ int _thread_pool_sz;
 queue<int> *cfd_que;
 int *queindx;
 pthread_t *threads;
+pthread_mutex_t que_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 CPUAffi cpu_affi(false);
+uint16_t conn_port = 0;
 
 void add_socket(int cfd) {
 	static struct epoll_event ev;
@@ -97,18 +99,18 @@ void handle_client_request(int cfd) {
 	/* Receive data sent by the client */
 
 	while (true) {
-	//bytes_read = read(cfd, msg_buf, sizeof(msg_buf));
-	rsz = recv(cfd, msg_buf, sizeof(msg_buf), MSG_DONTWAIT);
+        //bytes_read = read(cfd, msg_buf, sizeof(msg_buf));
+        rsz = recv(cfd, msg_buf, sizeof(msg_buf), MSG_DONTWAIT);
 
-	if (rsz <= 0)
-	{
-	    //remove_socket(cfd);
-	    //return;
-	    break;
-	}
-	/* Set the last index of the character array as a null character */
-	    msg_buf[rsz] = '\0';
-	    printf("Message (%d bytes) from client: %s \n", rsz, msg_buf);
+        if (rsz <= 0)
+        {
+            remove_socket(cfd);
+            return;
+            //break;
+        }
+        /* Set the last index of the character array as a null character */
+            msg_buf[rsz] = '\0';
+            printf("Message (%d bytes) from client: %s \n", rsz, msg_buf);
 	}
 
 	usleep(10);
@@ -141,8 +143,10 @@ void *request_handler_thread(void *param) {
 	while(true) {
 
 		if (!cfd_que[qindx].empty()) {
+            pthread_mutex_lock(&que_mtx);
 			fd = cfd_que[qindx].front();
 			cfd_que[qindx].pop();
+            pthread_mutex_unlock(&que_mtx);
 			if (is_closed(fd))
 			{
 				//cout << "request_handler_thread(" <<qindx <<"):removing socket = " << fd << endl;
@@ -172,7 +176,9 @@ void *poller_thread(void *) {
 		for(int i=0;i<nfds;i++) {
 			//cout <<"Pushing to queue" << i%3 <<endl;
 			qi = events[i].data.fd % _thread_pool_sz;
+            pthread_mutex_lock(&que_mtx);
 			cfd_que[qi].push(events[i].data.fd);
+            pthread_mutex_unlock(&que_mtx);
 		}
 	  }
 
@@ -203,7 +209,7 @@ void do_start_socksrv() {
 	}
 	/* Initializing structure elements for address */
 	srv_addr.sin_family = AF_INET;
-	srv_addr.sin_port = htons(CONNECTION_PORT);
+	srv_addr.sin_port = htons(conn_port);
 	srv_addr.sin_addr.s_addr = INADDR_ANY;
 	srv_addr.sin_zero[8] = '\0';
 
@@ -261,9 +267,14 @@ void init() {
 }
 
 
-int main()
+int main(int argc, char *argv[])
 {
 
+    if (argc > 1)
+        conn_port = atoi(argv[1]);
+
+    if (conn_port == 0)
+        conn_port = CONNECTION_PORT;
 
 	do_sig_ignore();
 

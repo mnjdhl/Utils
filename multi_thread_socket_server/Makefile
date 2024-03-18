@@ -1,5 +1,5 @@
 build:
-	 g++ socksrv_thpool.cpp -o socksrv_thpool
+	 g++ socksrv_thpool.cpp -lpthread -o socksrv_thpool
 	 g++ sockclient.cpp -o sockclient
 
 clean:

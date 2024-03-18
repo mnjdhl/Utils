@@ -27,6 +27,99 @@ int epfd;
 queue<int> cfd_que[THREAD_POOL_SZ];
 int queindx[THREAD_POOL_SZ];
 
+uint16_t conn_port = 0;
+pthread_t threads[THREAD_POOL_SZ + 1];
+int srv_sfd;
+
+void add_socket(int cfd);
+void *poller_thread(void *);
+void *request_handler_thread(void *param);
+
+void init_srv_sock() {
+	int opt_val = 1;
+	struct sockaddr_in srv_addr;
+
+	/* Creating the socket with IPv4 domain and TCP protocol */
+	srv_sfd = socket(AF_INET, SOCK_STREAM, 0);
+	/* Check if the socket is created successfully */
+	if (srv_sfd < 0)
+	{
+		perror("Socket creation failed");
+		/* EXIT_FAILURE is a macro used to indicate unsuccessful execution of the program */
+		exit(EXIT_FAILURE);
+	}     
+
+	/* Set options for the socket */
+	int status = setsockopt(srv_sfd, SOL_SOCKET,SO_REUSEADDR , &opt_val,sizeof(opt_val));
+	/* Check if options are set successfully */
+	if (status < 0){
+		perror("Couldn't set options");
+		exit(EXIT_FAILURE);
+	}
+	/* Initializing structure elements for address */
+	srv_addr.sin_family = AF_INET;
+	/* Convert port to network byte order using htons */
+	srv_addr.sin_port = htons(conn_port);
+	/* Any address available */
+	srv_addr.sin_addr.s_addr = INADDR_ANY;
+	/* Assigning null character to the last index of the character array */
+	srv_addr.sin_zero[8] = '\0';
+	/* bind the socket with the values address and port from the sockaddr_in structure */
+	status = bind(srv_sfd, (struct sockaddr*)&srv_addr, sizeof(struct sockaddr));
+	/* Check if the binding was successful */
+	if (status < 0) {
+		perror("Couldn't bind socket");
+		exit(EXIT_FAILURE);
+	}
+
+
+}
+
+void init_threads() {
+
+	/* Create epoll fd, poller thread and client request handler threads */
+	pthread_attr_init(&attr);
+	epfd = epoll_create(10);
+	pthread_create(&threads[0], &attr, poller_thread, NULL);
+	for(int i = 1;i < (THREAD_POOL_SZ + 1);i++) {
+		queindx[i-1] = i-1;
+		pthread_create(&threads[i], &attr, request_handler_thread, (void *)&queindx[i-1]);
+	}
+
+
+}
+
+void start_server() {
+
+	struct sockaddr_in cli_addr;
+	int cli_sfd;
+	int addr_len;
+    int status;
+
+
+	//pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	while (true) {
+
+	    /* Listen on specified port with a maximum of 4 requests */
+	    status = listen(srv_sfd, 4);
+
+	    /* Check if the socket is listening successfully */
+	    if (status  <   0) {
+		    perror("Couldn't listen for connections");
+		    exit(EXIT_FAILURE);
+	    }
+	    addr_len = sizeof(cli_addr);
+
+	    //pthread_create(&threads[0], &attr, handle_client_request, (void *)&cli_sfd);
+	    //handle_client_request(cli_sfd);
+	    //pthread_join(threads[0], NULL);
+
+	    /* Accept connection signals from the client */
+	    cli_sfd = accept(srv_sfd, (struct sockaddr*)&cli_addr, (socklen_t*)&addr_len);
+	    add_socket(cli_sfd);
+	}
+
+}
 
 void add_socket(int cfd) {
 	static struct epoll_event ev;
@@ -152,86 +245,18 @@ void *poller_thread(void *) {
 
 }
 
-uint16_t conn_port = 0;
 int main(int argc, char *argv[])
 {
-
-	pthread_t threads[THREAD_POOL_SZ + 1];
-	int srv_sfd;
-	int cli_sfd;
-	int addr_len;
-	int opt_val = 1;
-	struct sockaddr_in srv_addr;
-	struct sockaddr_in cli_addr;
-
     if (argc > 1)
         conn_port = atoi(argv[1]);
 
     if (conn_port == 0)
         conn_port = CONNECTION_PORT;
-         
-	/* Creating the socket with IPv4 domain and TCP protocol */
-	srv_sfd = socket(AF_INET, SOCK_STREAM, 0);
-	/* Check if the socket is created successfully */
-	if (srv_sfd<0)
-	{
-		perror("Socket creation failed");
-		/* EXIT_FAILURE is a macro used to indicate unsuccessful execution of the program */
-		exit(EXIT_FAILURE);
-	}     
 
-	/* Set options for the socket */
-	int status=setsockopt(srv_sfd, SOL_SOCKET,SO_REUSEADDR , &opt_val,sizeof(opt_val));
-	/* Check if options are set successfully */
-	if (status<0){
-		perror("Couldn't set options");
-		exit(EXIT_FAILURE);
-	}
-	/* Initializing structure elements for address */
-	srv_addr.sin_family = AF_INET;
-	/* Convert port to network byte order using htons */
-	srv_addr.sin_port = htons(conn_port);
-	/* Any address available */
-	srv_addr.sin_addr.s_addr = INADDR_ANY;
-	/* Assigning null character to the last index of the character array */
-	srv_addr.sin_zero[8]='\0';
-	/* bind the socket with the values address and port from the sockaddr_in structure */
-	status=bind(srv_sfd, (struct sockaddr*)&srv_addr, sizeof(struct sockaddr));
-	/* Check if the binding was successful */
-	if (status<0) {
-		perror("Couldn't bind socket");
-		exit(EXIT_FAILURE);
-	}
+    init_srv_sock();
+    init_threads();
+    start_server();
 
-	/* Create epoll fd, poller thread and client request handler threads */
-	pthread_attr_init(&attr);
-	epfd = epoll_create(10);
-	pthread_create(&threads[0], &attr, poller_thread, NULL);
-	for(int i=1;i<(THREAD_POOL_SZ + 1);i++) {
-		queindx[i-1] = i-1;
-		pthread_create(&threads[i], &attr, request_handler_thread, (void *)&queindx[i-1]);
-	}
-	//pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-	while (true) {
-
-	    /* Listen on specified port with a maximum of 4 requests */
-	    status = listen(srv_sfd, 4);
-	    
-	    /* Check if the socket is listening successfully */
-	    if (status<0) {
-		perror("Couldn't listen for connections");
-		exit(EXIT_FAILURE);
-	    }
-	    addr_len = sizeof(cli_addr);
-	    
-	    //pthread_create(&threads[0], &attr, handle_client_request, (void *)&cli_sfd);
-	    //handle_client_request(cli_sfd);
-	    //pthread_join(threads[0], NULL);
-
-	    /* Accept connection signals from the client */
-	    cli_sfd = accept(srv_sfd, (struct sockaddr*)&cli_addr, (socklen_t*)&addr_len);
-	    add_socket(cli_sfd);
-	}
 
 	pthread_attr_destroy(&attr);
 	close(srv_sfd);

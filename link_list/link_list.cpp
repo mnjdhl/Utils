@@ -37,18 +37,39 @@ node *list_insert(int v, node *l) {
 	return l;
 }
 
-node *list_del(int v, node *l) {
+node *list_find(int v, node *l) {
 
-	node *cur, *prv;
+	node *cur;
 
-	prv = NULL;
 	cur = l;
 	while (cur != NULL) {
 		if (cur->val == v)
 			break;
+		cur = cur->next;
+	}
+
+	return cur;
+}
+
+
+node *list_del(int v, node *l) {
+
+	node *cur, *prv;
+    bool found = false;
+
+	prv = NULL;
+	cur = l;
+	while (cur != NULL) {
+		if (cur->val == v) {
+            found = true;
+			break;
+        }
 		prv = cur;
 		cur = cur->next;
 	}
+
+    if (!found)
+        return l;
 
 	if (prv == NULL)
 		l = cur->next;
@@ -230,6 +251,18 @@ int main() {
 	for (int i=0;i<100;i++)
 		list = list_insert(i, list);
 
+    /* Test list_find() */
+    if (list_find(29, list))
+        printf("\n 29 found in the list!!");
+    else
+        printf("\n 29 not found in the list!!");
+
+    if (list_find(131, list))
+        printf("\n 131 found in the list!!");
+    else
+        printf("\n 131 not found in the list!!");
+
+    printf("\n");
 	list_show(list);
 	list = list_del(0, list);
 	list = list_del(55, list);

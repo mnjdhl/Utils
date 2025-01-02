@@ -19,6 +19,7 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <future>
 #include "CPUAffi.h"
 #include "sock_common.h"
 
@@ -88,33 +89,35 @@ bool is_closed(int sfd) {
 
 }
 
-void handle_client_request(int cfd) {
+int handle_client_request(int cfd) {
 /* Buffer to store message */
     char msg_buf[512];
+    char snd_buf[512];
     const char* message = "Hello Client!! This is a message from your server!";
-    int rsz;
+    int rsz, ssz;
 
 	/* Receive data sent by the client */
 
-	//while (true) {
-        //bytes_read = read(cfd, msg_buf, sizeof(msg_buf));
-        //rsz = recv(cfd, msg_buf, sizeof(msg_buf), MSG_DONTWAIT);
-        rsz = recv(cfd, msg_buf, sizeof(msg_buf), 0);
+    rsz = recv(cfd, msg_buf, sizeof(msg_buf), 0);
 
-        if (rsz <= 0)
-        {
-            remove_socket(cfd);
-            return;
-            //break;
-        }
-        /* Set the last index of the character array as a null character */
-            msg_buf[rsz] = '\0';
-            printf("Message (%d bytes) from client: %s \n", rsz, msg_buf);
-	//}
+    if (rsz <= 0)
+    {
+        //remove_socket(cfd);
+        return -1;
+        //break;
+    }
+    /* Set the last index of the character array as a null character */
+    msg_buf[rsz] = '\0';
+    printf("Message (%d bytes) from client %d: %s \n", rsz, cfd, msg_buf);
 
-	//usleep(10);
 	/* Send data to the client */
-	send(cfd, message, strlen(message), 0);
+    sprintf(snd_buf, "%d::%s", cfd, message);
+	ssz = send(cfd, snd_buf, strlen(snd_buf), 0);
+
+    if (ssz <= 0)
+        return -1;
+
+    return 0;
 
 }
 
@@ -122,6 +125,7 @@ void request_handler_thread(int qindx) {
 
 	int fd;
 	int th_pid = syscall(SYS_gettid);
+    std::future<int> fut;
 
 
 	//cpu_affi.set_cpu_affinity(qindx);
@@ -144,7 +148,8 @@ void request_handler_thread(int qindx) {
 			}
 
 			//cout << "request_handler_thread(" <<qindx <<"):Handling Request for fd = " << fd << endl;
-			handle_client_request(fd);
+            /* Returns the future object 'fut' which can be reffered later */
+			fut = std::async(std::launch::async, handle_client_request, fd);
 		} else {
 			usleep(100);
 		}
